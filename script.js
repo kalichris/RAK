@@ -39,7 +39,8 @@ const RAK_POINT = { lat: 25.8, lon: 55.98 };
 window.addEventListener('load', () => {
     initializeRenderer();
     createEarthScene();
-    focusInitialViewOnUAE();
+    createSatellite();
+    // createPulsingMarker(); // Removed to prioritize logo view
     animate();
     loadUAEGeoJsonAndInitMiniMaps();
 
@@ -260,11 +261,13 @@ function createEarthScene() {
 
     uaeBorders = new THREE.Group();
     uaeHighlight = new THREE.Group();
-    earthGroup.add(uaeBorders);
     earthGroup.add(uaeHighlight);
 
+    // Create logo first so it's ready
+    // createProjectedLogo() is called by createSatellite()
+
     drawUAEBorders3D();
-    createPulsingMarker();
+    // createPulsingMarker(); // Removing red pulsing marker to clear view for logo
     createUAELabel();
 }
 
@@ -300,6 +303,286 @@ function createUAELabel() {
 }
 
 let pulsingMarker = null;
+
+let satellite = null;
+let satelliteBeam = null;
+let satelliteAngle = 0;
+
+const UAE_LOGO_URL = ''; // Not used anymore
+
+// ... present code ...
+
+function createProjectedLogo() {
+    // Instead of an image logo, use a subtle circular marker (holographic style)
+    const logoSize = 0.05;
+    const geometry = new THREE.CircleGeometry(logoSize, 32);
+
+    const material = new THREE.MeshBasicMaterial({
+        color: 0xffffff, // White/Holographic
+        transparent: true,
+        opacity: 0.3, // Very subtle transparency
+        depthWrite: false,
+        side: THREE.FrontSide,
+        blending: THREE.AdditiveBlending // Glowy effect
+    });
+
+    const logoMesh = new THREE.Mesh(geometry, material);
+
+    // Position exactly at UAE center but slightly higher than the highlight fill
+    const pos = latLonToVector3(UAE_CENTER.lat, UAE_CENTER.lon, 1.015);
+    logoMesh.position.copy(pos);
+    logoMesh.lookAt(new THREE.Vector3(0, 0, 0));
+
+    // Add a ring around it for detail
+    const ringGeo = new THREE.RingGeometry(logoSize * 0.8, logoSize, 32);
+    const ringMat = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.5,
+        side: THREE.FrontSide,
+        blending: THREE.AdditiveBlending
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.position.z = 0.001; // Slightly above circle
+    logoMesh.add(ring);
+
+    logoMesh.userData.isLogo = true;
+    earthGroup.add(logoMesh);
+}
+
+// Navigation: Scroll to the 3D Globe section when button is clicked
+function startExperience() {
+    const globeSection = document.querySelector('.globe-section');
+    if (globeSection) {
+        globeSection.scrollIntoView({ behavior: 'smooth' });
+    }
+}
+
+function createSatellite() {
+    // === High-Detail Realistic Satellite Construction ===
+    satellite = new THREE.Group();
+
+    // 1. Main Bus Body (Octagonal Prism approximation using Box + angled sides)
+    const bodyLength = 0.14;
+    const bodyWidth = 0.07;
+
+    // Core structure (Gold foil mlil)
+    const coreGeo = new THREE.BoxGeometry(bodyWidth, bodyWidth, bodyLength);
+    const goldMat = new THREE.MeshStandardMaterial({
+        color: 0xffd700, // Gold foil
+        metalness: 0.9,
+        roughness: 0.4,
+        envMapIntensity: 1.5
+    });
+    const core = new THREE.Mesh(coreGeo, goldMat);
+    satellite.add(core);
+
+    // 2. Solar Arrays (Large, articulated panels)
+    const panelLength = 0.45;
+    const panelWidth = 0.12;
+    const panelThick = 0.005;
+
+    const panelGeo = new THREE.BoxGeometry(panelLength, panelWidth, panelThick);
+    const panelMat = new THREE.MeshStandardMaterial({
+        color: 0x102040, // Dark photovoltaic blue
+        emissive: 0x051025,
+        emissiveIntensity: 0.3,
+        metalness: 0.8,
+        roughness: 0.2
+    });
+
+    // Panel Supports (truss structure)
+    const trussGeo = new THREE.CylinderGeometry(0.003, 0.003, 0.25, 8);
+    const silverMat = new THREE.MeshStandardMaterial({ color: 0xc0c0c0, metalness: 0.8, roughness: 0.3 });
+
+    // Left Wing
+    const leftPanel = new THREE.Mesh(panelGeo, panelMat);
+    leftPanel.position.set(-0.35, 0, 0);
+    satellite.add(leftPanel);
+
+    const leftTruss = new THREE.Mesh(trussGeo, silverMat);
+    leftTruss.rotation.z = Math.PI / 2;
+    leftTruss.position.set(-0.16, 0, 0);
+    satellite.add(leftTruss);
+
+    // Right Wing
+    const rightPanel = new THREE.Mesh(panelGeo, panelMat);
+    rightPanel.position.set(0.35, 0, 0);
+    satellite.add(rightPanel);
+
+    const rightTruss = new THREE.Mesh(trussGeo, silverMat);
+    rightTruss.rotation.z = Math.PI / 2;
+    rightTruss.position.set(0.16, 0, 0);
+    satellite.add(rightTruss);
+
+    // 3. Communications Payload (Dishes)
+    // Main High-Gain Antenna (Large Dish)
+    const dishGeo = new THREE.ConeGeometry(0.06, 0.02, 32, 1, true);
+    const whiteMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee, side: THREE.DoubleSide });
+    const mainDish = new THREE.Mesh(dishGeo, whiteMat);
+    mainDish.rotation.x = Math.PI / 2;
+    mainDish.position.set(0, 0, bodyLength / 2 + 0.02);
+    satellite.add(mainDish);
+
+    // Feed horn inside dish
+    const feedGeo = new THREE.CylinderGeometry(0.005, 0.002, 0.04, 8);
+    const feed = new THREE.Mesh(feedGeo, silverMat);
+    feed.rotation.x = Math.PI / 2;
+    feed.position.set(0, 0, bodyLength / 2 + 0.04);
+    satellite.add(feed);
+
+    // Secondary Telemetry Antennas (Small helix/whips)
+    const rodGeo = new THREE.CylinderGeometry(0.002, 0.002, 0.15, 8);
+    const antenna1 = new THREE.Mesh(rodGeo, silverMat);
+    antenna1.position.set(0.03, 0.04, -bodyLength / 2);
+    antenna1.rotation.x = -Math.PI / 4;
+    satellite.add(antenna1);
+
+    const antenna2 = new THREE.Mesh(rodGeo, silverMat);
+    antenna2.position.set(-0.03, -0.04, -bodyLength / 2);
+    antenna2.rotation.x = Math.PI / 4;
+    satellite.add(antenna2);
+
+    // 4. Propulsion / Thrusters (Small cones on sides)
+    const thrusterGeo = new THREE.ConeGeometry(0.01, 0.015, 8, 1, true);
+    const darkMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+
+    const thruster1 = new THREE.Mesh(thrusterGeo, darkMat);
+    thruster1.position.set(0, bodyWidth / 2 + 0.005, 0);
+    satellite.add(thruster1);
+
+    const thruster2 = new THREE.Mesh(thrusterGeo, darkMat);
+    thruster2.position.set(0, -bodyWidth / 2 - 0.005, 0);
+    thruster2.rotation.z = Math.PI;
+    satellite.add(thruster2);
+
+    // 5. Sensor Instruments (Camera / Star Tracker)
+    const sensorBox = new THREE.BoxGeometry(0.02, 0.02, 0.04);
+    const lensMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.1 });
+    const sensor = new THREE.Mesh(sensorBox, silverMat);
+    sensor.position.set(0.02, -0.02, bodyLength / 2);
+    satellite.add(sensor);
+
+    // Lens geometry
+    const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.005, 16), lensMat);
+    lens.rotation.x = Math.PI / 2;
+    lens.position.set(0.02, -0.02, bodyLength / 2 + 0.02);
+    satellite.add(lens);
+
+
+    // Position Satellite (Geostationary relative to Earth group)
+    const satelliteRadius = 1.65;
+    const satellitePos = latLonToVector3(UAE_CENTER.lat, UAE_CENTER.lon, satelliteRadius);
+    satellite.position.copy(satellitePos);
+    satellite.lookAt(new THREE.Vector3(0, 0, 0)); // Look at Earth center
+
+    // Add to EARTH group so it rotates WITH the earth
+    earthGroup.add(satellite);
+
+    // === Connection Beam (Enhanced Visibility) ===
+    const beamGeometry = new THREE.CylinderGeometry(0.004, 0.12, satelliteRadius - 1, 32, 1, true); // Smooth cylinder
+    const beamMaterial = new THREE.ShaderMaterial({
+        uniforms: {
+            time: { value: 0 },
+            opacity: { value: 0.55 },
+            color: { value: new THREE.Color(0x4fc3f7) }
+        },
+        vertexShader: `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `,
+        fragmentShader: `
+            uniform float time;
+            uniform float opacity;
+            uniform vec3 color;
+            varying vec2 vUv;
+            void main() {
+                // Complex interference pattern for "data stream" look
+                float flow = sin(vUv.y * 20.0 - time * 8.0) * 0.5 + 0.5;
+                float pulse = sin(time * 3.0) * 0.2 + 0.8;
+                
+                // Focused core beam
+                float core = 1.0 - smoothstep(0.0, 0.4, abs(vUv.x - 0.5));
+                
+                // Soft edges
+                float edges = smoothstep(0.0, 0.2, vUv.y) * smoothstep(1.0, 0.8, vUv.y);
+                
+                float combined = (core * 0.8 + flow * 0.4) * pulse * edges;
+                
+                gl_FragColor = vec4(color, opacity * combined);
+            }
+        `,
+        transparent: true,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending
+    });
+
+    satelliteBeam = new THREE.Mesh(beamGeometry, beamMaterial);
+
+    // Position beam halfway
+    const uaePos = latLonToVector3(UAE_CENTER.lat, UAE_CENTER.lon, 1);
+    const midPoint = new THREE.Vector3().addVectors(satellitePos, uaePos).multiplyScalar(0.5);
+    satelliteBeam.position.copy(midPoint);
+    satelliteBeam.lookAt(uaePos); // Point towards UAE
+    satelliteBeam.rotateX(-Math.PI / 2); // Align cylinder
+
+    earthGroup.add(satelliteBeam);
+
+    createProjectedLogo();
+}
+
+function createProjectedLogo() {
+    const logoSize = 0.08; // Much smaller to fit inside UAE shading
+    const geometry = new THREE.PlaneGeometry(logoSize, logoSize);
+
+    const loader = new THREE.TextureLoader();
+    loader.crossOrigin = 'anonymous';
+
+    loader.load(UAE_LOGO_URL, (texture) => {
+        texture.minFilter = THREE.LinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+
+        // 1. The Logo Mesh (True Colors, blended nicely)
+        const material = new THREE.MeshBasicMaterial({
+            map: texture,
+            transparent: true,
+            opacity: 0.95,
+            depthWrite: false,
+            side: THREE.FrontSide,
+            blending: THREE.NormalBlending
+        });
+
+        const logoMesh = new THREE.Mesh(geometry, material);
+
+        // Position exactly at UAE center but slightly higher than the highlight fill (1.009)
+        // Set to 1.012 so it sits nicely on top of the red fill
+        const pos = latLonToVector3(UAE_CENTER.lat, UAE_CENTER.lon, 1.012);
+        logoMesh.position.copy(pos);
+        logoMesh.lookAt(new THREE.Vector3(0, 0, 0));
+        logoMesh.rotateX(Math.PI);
+        logoMesh.rotateZ(Math.PI);
+        logoMesh.userData.isLogo = true;
+
+        earthGroup.add(logoMesh);
+
+    }, undefined, (err) => {
+        console.error("Error loading logo texture", err);
+    });
+}
+
+function updateSatellite() {
+    if (!satelliteBeam) return;
+
+    // Just update beam animation since position is now fixed to earthGroup
+    // Handle ShaderMaterial uniforms
+    if (satelliteBeam.material.uniforms) {
+        satelliteBeam.material.uniforms.time.value = Date.now() * 0.001;
+    }
+}
 
 function createPulsingMarker() {
 
@@ -500,6 +783,8 @@ function animate() {
         clouds.scale.set(cloudBreathe, cloudBreathe, cloudBreathe);
     }
 
+    updateSatellite();
+
 
     uaeHighlight.children.forEach(mesh => {
         if (mesh.material && mesh.material.uniforms && mesh.material.uniforms.time) {
@@ -510,6 +795,17 @@ function animate() {
             }
         }
     });
+
+    // Animate Logo
+    if (earthGroup) {
+        earthGroup.children.forEach(child => {
+            if (child.userData.isLogo) {
+                // Gentle floating/breathing effect
+                const scale = 1.0 + Math.sin(time * 2.0) * 0.05;
+                child.scale.set(scale, scale, scale);
+            }
+        });
+    }
 
 
     if (pulsingMarker) {

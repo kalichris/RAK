@@ -904,7 +904,7 @@ html {
     transform: scale(0.98);
 }
 
-/* 3D Enlarged State */
+
 .leader-img.enlarged {
     position: fixed !important;
     top: 50% !important;
