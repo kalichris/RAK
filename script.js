@@ -17,13 +17,13 @@ function toggleZoom() {
     const button = document.getElementById('zoom-uae-btn');
     if (isZoomedToUAE) {
         focusInitialViewOnUAE();
-        button.textContent = 'اسألني فين رأس الخيمة';
+        button.textContent = 'اسألني عن رأس الخيمة';
 
         document.getElementById('uae-box').classList.remove('visible');
         document.getElementById('rak-box').classList.remove('visible');
     } else {
         zoomToUAE();
-        button.textContent = 'رجعني';
+        button.textContent = 'رجوع';
     }
     isZoomedToUAE = !isZoomedToUAE;
 }
@@ -141,7 +141,7 @@ function initializeRenderer() {
 
     const bloomPass = new THREE.UnrealBloomPass(
         new THREE.Vector2(container.clientWidth, container.clientHeight),
-        1.0,
+        0.5, // Reduced bloom strength from 1.0
         0.4,
         0.85
     );
@@ -188,7 +188,7 @@ function createEarthScene() {
         normalMap: normalMap,
         emissiveMap: nightMap,
         emissive: new THREE.Color(0xffffcc),
-        emissiveIntensity: 1.2,
+        emissiveIntensity: 0.4, // Reduced from 1.2 for less glow
         roughness: 0.7,
         metalness: 0.1
     });
@@ -269,6 +269,7 @@ function createEarthScene() {
     drawUAEBorders3D();
     // createPulsingMarker(); // Removing red pulsing marker to clear view for logo
     createUAELabel();
+    createRAKLabel();
 }
 
 function createUAELabel() {
@@ -276,7 +277,6 @@ function createUAELabel() {
     canvas.width = 512;
     canvas.height = 128;
     const ctx = canvas.getContext('2d');
-
 
     ctx.clearRect(0, 0, 512, 128);
     ctx.shadowBlur = 10;
@@ -302,53 +302,66 @@ function createUAELabel() {
     uaeHighlight.add(sprite);
 }
 
+function createRAKLabel() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 128; // Taller for background padding
+    const ctx = canvas.getContext('2d');
+
+    // Add semi-transparent background (Hint style)
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'; // Dark semi-transparent background
+    ctx.beginPath();
+    // Rounded rectangle background
+    const x = 28, y = 24, w = 200, h = 80, r = 20;
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+    ctx.fill();
+
+    // Add border to background
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    // Text
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'Bold 50px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(0, 0, 0, 1.0)';
+    ctx.shadowBlur = 4;
+    ctx.fillText('RAK', 128, 64);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.SpriteMaterial({
+        map: texture,
+        transparent: true,
+        depthTest: false
+    });
+    const sprite = new THREE.Sprite(material);
+
+    // Position at RAK
+    const pos = latLonToVector3(RAK_POINT.lat, RAK_POINT.lon, 1.025);
+    sprite.position.copy(pos);
+    sprite.scale.set(0.04, 0.02, 1); // Adjusted scale for new aspect ratio
+
+    uaeHighlight.add(sprite);
+}
+
 let pulsingMarker = null;
 
 let satellite = null;
 let satelliteBeam = null;
 let satelliteAngle = 0;
 
-const UAE_LOGO_URL = ''; // Not used anymore
+const UAE_LOGO_URL = 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cb/Emblem_of_the_United_Arab_Emirates.svg/1024px-Emblem_of_the_United_Arab_Emirates.svg.png'; // Fallback or use a generated canvas
 
 // ... present code ...
 
-function createProjectedLogo() {
-    // Instead of an image logo, use a subtle circular marker (holographic style)
-    const logoSize = 0.05;
-    const geometry = new THREE.CircleGeometry(logoSize, 32);
 
-    const material = new THREE.MeshBasicMaterial({
-        color: 0xffffff, // White/Holographic
-        transparent: true,
-        opacity: 0.3, // Very subtle transparency
-        depthWrite: false,
-        side: THREE.FrontSide,
-        blending: THREE.AdditiveBlending // Glowy effect
-    });
-
-    const logoMesh = new THREE.Mesh(geometry, material);
-
-    // Position exactly at UAE center but slightly higher than the highlight fill
-    const pos = latLonToVector3(UAE_CENTER.lat, UAE_CENTER.lon, 1.015);
-    logoMesh.position.copy(pos);
-    logoMesh.lookAt(new THREE.Vector3(0, 0, 0));
-
-    // Add a ring around it for detail
-    const ringGeo = new THREE.RingGeometry(logoSize * 0.8, logoSize, 32);
-    const ringMat = new THREE.MeshBasicMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0.5,
-        side: THREE.FrontSide,
-        blending: THREE.AdditiveBlending
-    });
-    const ring = new THREE.Mesh(ringGeo, ringMat);
-    ring.position.z = 0.001; // Slightly above circle
-    logoMesh.add(ring);
-
-    logoMesh.userData.isLogo = true;
-    earthGroup.add(logoMesh);
-}
 
 // Navigation: Scroll to the 3D Globe section when button is clicked
 function startExperience() {
@@ -536,7 +549,7 @@ function createSatellite() {
 }
 
 function createProjectedLogo() {
-    const logoSize = 0.08; // Much smaller to fit inside UAE shading
+    const logoSize = 0.05; // Much smaller (0.05) as requested
     const geometry = new THREE.PlaneGeometry(logoSize, logoSize);
 
     const loader = new THREE.TextureLoader();
@@ -550,7 +563,7 @@ function createProjectedLogo() {
         const material = new THREE.MeshBasicMaterial({
             map: texture,
             transparent: true,
-            opacity: 0.95,
+            opacity: 0.6, // More transparent (0.6) as requested
             depthWrite: false,
             side: THREE.FrontSide,
             blending: THREE.NormalBlending
@@ -674,8 +687,9 @@ function createFillMesh(points3D, radius = 1.01) {
         uniforms: {
             color: { value: new THREE.Color(0xff2222) },
             glowColor: { value: new THREE.Color(0xffcc00) },
-            opacity: { value: 0.7 },
-            time: { value: 0 }
+            opacity: { value: 0.4 }, // Reduced opacity (less glow)
+            time: { value: 0 },
+            glowIntensity: { value: 0.5 } // Reduced glow intensity
         },
         vertexShader: `
             varying vec3 vNormal;
@@ -693,17 +707,18 @@ function createFillMesh(points3D, radius = 1.01) {
             uniform vec3 glowColor;
             uniform float opacity;
             uniform float time;
+            uniform float glowIntensity;
             varying vec3 vNormal;
             varying vec3 vPosition;
             void main() {
                 vec3 viewDir = normalize(cameraPosition - vPosition);
                 float fresnel = pow(1.0 - abs(dot(vNormal, viewDir)), 3.0);
-
                 
-                float scanline = sin(vPosition.y * 100.0 + time * 10.0) * 0.15 + 0.85;
+                // Reduced scanline intensity
+                float scanline = sin(vPosition.y * 50.0 + time * 5.0) * 0.05 + 0.95;
                 
-                vec3 finalColor = mix(color, glowColor, fresnel);
-                float finalAlpha = (opacity + fresnel * 0.5) * scanline;
+                vec3 finalColor = mix(color, glowColor, fresnel * glowIntensity);
+                float finalAlpha = (opacity + fresnel * 0.3) * scanline; // Lower fresnel contribution
 
                 gl_FragColor = vec4(finalColor, finalAlpha);
             }
@@ -770,8 +785,8 @@ function animate() {
     const time = Date.now() * 0.001;
 
     if (earthGroup && isEarthRotating) {
-        earthGroup.rotation.y += 0.00045;
-        clouds.rotation.y += 0.0003;
+        earthGroup.rotation.y += 0.0009; // Faster rotation
+        clouds.rotation.y += 0.0006;
     }
 
     if (earth) {
