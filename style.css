@@ -908,7 +908,7 @@ html {
 .leader-img.enlarged {
     position: fixed !important;
     top: 50% !important;
-    left: 50% !important;
+    left: 100% !important;
     width: auto !important;
     max-width: 85vw !important;
     height: auto !important;
